@@ -1,0 +1,12 @@
+{
+    "test_loss": 0.08077249675989151,
+    "test_accuracy": 0.9735358953475952,
+    "precision_macro": 0.9678013636917172,
+    "recall_macro": 0.9597273793095089,
+    "f1_macro": 0.9626625881949546,
+    "total_parameters": 2426854,
+    "trainable_parameters": 1679590,
+    "non_trainable_parameters": 747264,
+    "number_of_classes": 38,
+    "test_images": 8162
+}

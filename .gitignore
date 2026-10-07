@@ -1,0 +1,31 @@
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing & development caches
+.pytest_cache/
+.coverage
+htmlcov/
+.loop-state.json
+
+# Streamlit & OS
+.streamlit/
+.DS_Store
+Thumbs.db
+
+# Datasets (large image collection)
+dataset/
+PlantVillage/
+archive.zip
+*.zip
+
+# Sample images
+tomato image.jpeg
