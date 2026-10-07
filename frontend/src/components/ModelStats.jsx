@@ -1,7 +1,10 @@
 import React from 'react';
 import { Target, Layers, Eye, Database } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export default function ModelStats() {
+  const { historyRecords, serverStatus } = useApp();
+
   const stats = [
     {
       icon: <Target size={20} className="stat-icon-emerald" />,
@@ -24,8 +27,8 @@ export default function ModelStats() {
     {
       icon: <Database size={20} className="stat-icon-purple" />,
       label: "Diagnostic Ledger",
-      value: "SQLite Persisted",
-      subtext: "Secure JWT authenticated history"
+      value: `${historyRecords.length} Saved Records`,
+      subtext: serverStatus === 'ok' ? 'SQLite Connected & Active' : 'Connecting to DB...'
     }
   ];
 

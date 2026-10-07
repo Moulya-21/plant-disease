@@ -1,35 +1,31 @@
 import React, { useState } from 'react';
-import { X, Lock, User, KeyRound, Sparkles, AlertCircle } from 'lucide-react';
-import { login, register } from '../api';
+import { X, Lock, User, KeyRound, Sparkles, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
+export default function AuthModal() {
+  const { authModalOpen, setAuthModalOpen, handleLogin, handleRegister } = useApp();
+
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState(null);
 
-  if (!isOpen) return null;
+  if (!authModalOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setSuccessMsg(null);
     setLoading(true);
 
     try {
       if (isRegisterMode) {
-        await register(username, password);
-        setSuccessMsg('Account created successfully! Signing you in...');
-        const loginData = await login(username, password);
-        onAuthSuccess(loginData.user);
-        onClose();
+        await handleRegister(username, password);
       } else {
-        const loginData = await login(username, password);
-        onAuthSuccess(loginData.user);
-        onClose();
+        await handleLogin(username, password);
       }
+      setAuthModalOpen(false);
     } catch (err) {
       setError(err.message || 'Authentication error occurred');
     } finally {
@@ -45,18 +41,23 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={() => setAuthModalOpen(false)}>
       <div className="modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-wrap">
             <KeyRound className="modal-icon" size={22} />
-            <h2>{isRegisterMode ? 'Create Agronomist Account' : 'Agronomist Authentication'}</h2>
+            <h2>{isRegisterMode ? 'Register Agronomist' : 'Agronomist Access'}</h2>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>
+          <button
+            className="modal-close-btn"
+            onClick={() => setAuthModalOpen(false)}
+            aria-label="Close modal"
+          >
             <X size={18} />
           </button>
         </div>
 
+        {/* Tab Switcher */}
         <div className="auth-tab-bar">
           <button
             type="button"
@@ -81,22 +82,15 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         </div>
 
         {error && (
-          <div className="auth-error-banner">
+          <div className="auth-error-banner animate-fade-in">
             <AlertCircle size={16} />
             <span>{error}</span>
           </div>
         )}
 
-        {successMsg && (
-          <div className="auth-success-banner">
-            <Sparkles size={16} />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label>Username</label>
+            <label>Agronomist Username</label>
             <div className="input-with-icon">
               <User size={16} className="input-icon" />
               <input
@@ -115,21 +109,29 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             <div className="input-with-icon">
               <Lock size={16} className="input-icon" />
               <input
-                type="password"
-                className="input-field"
+                type={showPassword ? 'text' : 'password'}
+                className="input-field !pr-10"
                 placeholder={isRegisterMode ? 'At least 8 characters' : 'Enter password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <button
+                type="button"
+                className="absolute right-3 text-[var(--text-dim)] hover:text-[var(--text-main)]"
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
           <button type="submit" className="btn btn-primary auth-submit-btn" disabled={loading}>
             {loading
-              ? 'Authenticating...'
+              ? 'Authenticating Session...'
               : isRegisterMode
-              ? 'Create Account & Access'
+              ? 'Create Profile & Sign In'
               : 'Sign In to PlantGuard'}
           </button>
 
@@ -137,10 +139,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             <div className="demo-credentials-box">
               <div className="demo-credentials-header">
                 <Sparkles size={14} className="demo-sparkle" />
-                <span>Quick Evaluation Demo Account</span>
+                <span>Pre-Configured Evaluation Profile</span>
               </div>
               <p className="demo-credentials-text">
-                Pre-configured administrator account: <code>admin</code> / <code>admin123</code>
+                Quick evaluator account: <code>admin</code> / <code>admin123</code>
               </p>
               <button
                 type="button"
