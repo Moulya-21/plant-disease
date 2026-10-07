@@ -9,58 +9,114 @@ import {
   Activity,
   Layers,
   Sparkles,
-  Info,
+  Printer,
+  FileText,
+  BadgeAlert,
+  Sprout,
 } from 'lucide-react';
 import { getAdvisoryForClass } from '../diseaseInfo';
+import GradCamViewer from './GradCamViewer';
+import { useApp } from '../context/AppContext';
 
-export default function PredictionResult({ result, gradcamImage }) {
-  const [showAllClasses, setShowAllClasses] = useState(false);
+export default function PredictionResult() {
+  const {
+    predictionResult,
+    gradcamImage,
+    previewUrl,
+    isInferring,
+    inferringType,
+  } = useApp();
+
+  const [activeTab, setActiveTab] = useState('immediate');
+  const [showSpectrum, setShowSpectrum] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  if (!result) return null;
+  // 1. Loading Skeleton State to eliminate Cumulative Layout Shift (CLS)
+  if (isInferring && !predictionResult) {
+    return (
+      <div className="result-container animate-fade-in">
+        <div className="glass-panel p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl skeleton" />
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="w-32 h-5 skeleton" />
+              <div className="w-64 h-8 skeleton" />
+            </div>
+          </div>
+          <div className="w-full h-10 skeleton" />
+        </div>
 
-  const { prediction, top_predictions, all_predictions } = result;
+        <div className="glass-panel p-6 flex flex-col gap-3">
+          <div className="w-48 h-6 skeleton" />
+          <div className="w-full h-12 skeleton" />
+          <div className="w-full h-12 skeleton" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!predictionResult) return null;
+
+  const { prediction, top_predictions, all_predictions } = predictionResult;
   const confidencePercent = (prediction.confidence * 100).toFixed(1);
   const isHealthy = prediction.class_name.toLowerCase().includes('healthy');
   const isLowConfidence = prediction.confidence < 0.6;
   const advisory = getAdvisoryForClass(prediction.class_name);
 
-  const filteredAllClasses = (all_predictions || []).filter((item) =>
+  const filteredSpectrum = (all_predictions || []).filter((item) =>
     item.class_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handlePrintSlip = () => {
+    window.print();
+  };
+
   return (
     <div className="result-container animate-fade-in">
-      {/* Primary Diagnosis Card */}
-      <div className={`diagnosis-banner glass-panel ${isHealthy ? 'banner-healthy' : 'banner-diseased'}`}>
+      {/* Primary Diagnosis Hero Card */}
+      <div
+        className={`diagnosis-banner glass-panel ${
+          isHealthy ? 'banner-healthy' : 'banner-diseased'
+        }`}
+      >
         <div className="diagnosis-banner-content">
           <div className="diagnosis-header-row">
             <div className="diagnosis-icon-wrapper">
               {isHealthy ? (
-                <CheckCircle2 size={36} className="diag-icon diag-icon-healthy" />
+                <CheckCircle2 size={38} className="diag-icon diag-icon-healthy" />
               ) : (
-                <ShieldAlert size={36} className="diag-icon diag-icon-diseased" />
+                <ShieldAlert size={38} className="diag-icon diag-icon-diseased" />
               )}
             </div>
 
-            <div className="diagnosis-title-wrapper">
+            <div className="diagnosis-title-wrapper flex-1">
               <div className="diagnosis-tags">
                 <span className={`badge ${isHealthy ? 'badge-success' : 'badge-warning'}`}>
-                  {isHealthy ? 'Optimal Plant Health' : 'Pathology Detected'}
+                  {isHealthy ? 'Pristine Crop Health' : 'Pathology Detected'}
                 </span>
                 <span className="badge badge-neutral">Inference Confidence: {confidencePercent}%</span>
+                <span className="badge badge-neutral">Severity: {advisory.severity}</span>
               </div>
               <h2 className="primary-diagnosis-title">{prediction.class_name}</h2>
             </div>
+
+            <button
+              className="btn btn-secondary !py-1.5 !px-3 text-xs flex items-center gap-1.5 self-start"
+              onClick={handlePrintSlip}
+              title="Print Agronomic Prescription Slip"
+            >
+              <Printer size={14} />
+              <span>Export Slip</span>
+            </button>
           </div>
 
           {isLowConfidence && (
             <div className="low-confidence-alert">
               <AlertTriangle size={18} className="alert-icon" />
               <div>
-                <strong>Low Confidence Advisory ({confidencePercent}%):</strong>
+                <strong>Low Neural Certainty ({confidencePercent}%):</strong>
                 <span>
-                  {' '}The neural confidence is below 60%. Please verify lighting, ensure leaf focus, or consult with an agricultural extension officer.
+                  {' '}Confidence is below optimal threshold (&lt;60%). Inspect background noise, ensure proper focus, or examine leaves under natural daylight.
                 </span>
               </div>
             </div>
@@ -68,30 +124,20 @@ export default function PredictionResult({ result, gradcamImage }) {
         </div>
       </div>
 
-      {/* Grad-CAM Explainable AI Visualizer (if generated) */}
+      {/* Grad-CAM Attribution Heatmap with Interactive Slider */}
       {gradcamImage && (
-        <div className="gradcam-card glass-panel">
-          <div className="gradcam-header">
-            <div className="gradcam-title-wrap">
-              <Flame size={20} className="gradcam-icon" />
-              <h3>Explainable AI: Grad-CAM Activation Map</h3>
-            </div>
-            <span className="badge badge-neutral">Layer: conv2d_2</span>
-          </div>
-          <p className="gradcam-desc">
-            Visual explanation displaying the exact convolutional feature regions of the leaf that led the neural model to this diagnostic classification.
-          </p>
-          <div className="gradcam-image-display">
-            <img src={gradcamImage} alt="Grad-CAM Visualization" className="gradcam-img" />
-          </div>
-        </div>
+        <GradCamViewer
+          originalUrl={previewUrl}
+          gradcamImage={gradcamImage}
+          className={prediction.class_name}
+        />
       )}
 
-      {/* Top-3 Candidates & Distribution */}
+      {/* Candidate Softmax Distribution */}
       <div className="top-candidates-card glass-panel">
         <div className="card-section-header">
           <Activity size={18} className="header-icon" />
-          <h3>Top Candidate Classifications</h3>
+          <h3>Primary Softmax Candidates</h3>
         </div>
 
         <div className="candidate-list">
@@ -100,7 +146,7 @@ export default function PredictionResult({ result, gradcamImage }) {
             return (
               <div key={idx} className="candidate-row">
                 <div className="candidate-meta">
-                  <span className="candidate-rank">#{idx + 1}</span>
+                  <span className="candidate-rank">0{idx + 1}</span>
                   <span className="candidate-name">{candidate.class_name}</span>
                   <span className="candidate-score">{prob}%</span>
                 </div>
@@ -122,7 +168,7 @@ export default function PredictionResult({ result, gradcamImage }) {
         </div>
       </div>
 
-      {/* Agronomic Advisory and Treatment Protocol */}
+      {/* Comprehensive Agronomic Prescription & Advisory Tabs */}
       <div className="advisory-card glass-panel">
         <div className="card-section-header">
           <Sparkles size={18} className="header-icon" />
@@ -131,52 +177,80 @@ export default function PredictionResult({ result, gradcamImage }) {
 
         <p className="advisory-description">{advisory.description}</p>
 
-        <div className="treatment-grid">
-          <div className="treatment-item treatment-action">
-            <div className="treatment-label">Immediate Agronomic Actions</div>
-            <p className="treatment-text">{advisory.action}</p>
-          </div>
+        {/* Advisory Tabs */}
+        <div className="advisory-nav-tabs">
+          <button
+            className={`adv-tab ${activeTab === 'immediate' ? 'active' : ''}`}
+            onClick={() => setActiveTab('immediate')}
+          >
+            Immediate Actions
+          </button>
+          <button
+            className={`adv-tab ${activeTab === 'organic' ? 'active' : ''}`}
+            onClick={() => setActiveTab('organic')}
+          >
+            🌱 Organic Remedies
+          </button>
+          <button
+            className={`adv-tab ${activeTab === 'chemical' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chemical')}
+          >
+            🧪 Chemical Controls
+          </button>
+        </div>
 
-          <div className="treatment-item treatment-organic">
-            <div className="treatment-label">🌱 Organic & Biological Remedies</div>
-            <p className="treatment-text">{advisory.organic}</p>
-          </div>
+        <div className="advisory-tab-content animate-fade-in">
+          {activeTab === 'immediate' && (
+            <div className="treatment-item treatment-action">
+              <div className="treatment-label">Agronomic Field Protocol</div>
+              <p className="treatment-text">{advisory.action}</p>
+            </div>
+          )}
 
-          <div className="treatment-item treatment-chemical">
-            <div className="treatment-label">🧪 Chemical & Preventative Treatments</div>
-            <p className="treatment-text">{advisory.chemical}</p>
-          </div>
+          {activeTab === 'organic' && (
+            <div className="treatment-item treatment-organic">
+              <div className="treatment-label">Biological & Organic Measures</div>
+              <p className="treatment-text">{advisory.organic}</p>
+            </div>
+          )}
+
+          {activeTab === 'chemical' && (
+            <div className="treatment-item treatment-chemical">
+              <div className="treatment-label">Chemical Fungicide / Bactericide Treatments</div>
+              <p className="treatment-text">{advisory.chemical}</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Complete 38 Disease Probability Spectrum Accordion */}
+      {/* Full 38-Class Neural Spectrum Explorer */}
       {all_predictions && all_predictions.length > 0 && (
         <div className="all-classes-accordion glass-panel">
           <button
             type="button"
             className="accordion-toggle-btn"
-            onClick={() => setShowAllClasses(!showAllClasses)}
+            onClick={() => setShowSpectrum(!showSpectrum)}
           >
             <div className="accordion-toggle-title">
               <Layers size={18} />
               <span>Full 38-Class Neural Softmax Spectrum</span>
-              <span className="badge badge-neutral">{all_predictions.length} Total</span>
+              <span className="badge badge-neutral">{all_predictions.length} Total Classes</span>
             </div>
-            {showAllClasses ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            {showSpectrum ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </button>
 
-          {showAllClasses && (
+          {showSpectrum && (
             <div className="accordion-content animate-fade-in">
               <input
                 type="text"
                 className="input-field spectrum-search"
-                placeholder="Filter among 38 crop disease classes..."
+                placeholder="Search across 38 crop disease classes..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
 
               <div className="spectrum-list">
-                {filteredAllClasses.map((item, idx) => {
+                {filteredSpectrum.map((item, idx) => {
                   const prob = (item.confidence * 100).toFixed(3);
                   return (
                     <div key={idx} className="spectrum-item">
