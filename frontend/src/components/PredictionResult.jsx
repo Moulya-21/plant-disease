@@ -95,10 +95,26 @@ export default function PredictionResult() {
                   {isHealthy ? 'Pristine Crop Health' : 'Pathology Detected'}
                 </span>
                 <span className="badge badge-neutral">Inference Confidence: {confidencePercent}%</span>
-                <span className="badge badge-neutral">Severity: {advisory.severity}</span>
+                {prediction.severity_percentage !== undefined && (
+                  <span className={`badge ${prediction.severity_percentage > 35 ? 'badge-danger' : prediction.severity_percentage > 0 ? 'badge-warning' : 'badge-success'}`}>
+                    Lesion Area: {prediction.severity_percentage}% ({prediction.severity_grade})
+                  </span>
+                )}
+                {predictionResult.quality_metrics && (
+                  <span className={`badge ${predictionResult.quality_metrics.is_foliage_likely ? 'badge-success' : 'badge-warning'}`}>
+                    Foliage Gate: {predictionResult.quality_metrics.quality_rating}
+                  </span>
+                )}
+                {predictionResult.tta_enabled && (
+                  <span className="badge badge-neutral">TTA 4x Active</span>
+                )}
+                {predictionResult.cached && (
+                  <span className="badge badge-neutral">Instant Cache ⚡</span>
+                )}
               </div>
               <h2 className="primary-diagnosis-title">{prediction.class_name}</h2>
             </div>
+
 
             <button
               className="btn btn-secondary !py-1.5 !px-3 text-xs flex items-center gap-1.5 self-start"
