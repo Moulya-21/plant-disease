@@ -15,7 +15,7 @@ export default function ModelStats() {
     {
       icon: <Layers size={20} className="stat-icon-cyan" />,
       label: "Model Benchmark",
-      value: "95.52% Accuracy",
+      value: "97.35% Test Accuracy",
       subtext: "Custom Deep CNN (224×224 px)"
     },
     {

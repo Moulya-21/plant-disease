@@ -8,18 +8,20 @@ import PredictionResult from './components/PredictionResult';
 import HistoryDrawer from './components/HistoryDrawer';
 import ToastContainer from './components/ToastContainer';
 import ClassSpectrumExplorer from './components/ClassSpectrumExplorer';
+import LandingPage from './components/LandingPage';
+import ProfileModal from './components/ProfileModal';
 import { Sprout, Sparkles, Activity, ShieldCheck } from 'lucide-react';
 import './App.css';
 
 function MainLayout() {
-  const { predictionResult, isInferring } = useApp();
+  const { predictionResult, isInferring, user } = useApp();
 
   return (
     <div className="app-layout">
       <Navbar />
       <ToastContainer />
 
-      <main className="main-content">
+      {!user ? <LandingPage /> : <main className="main-content">
         {/* Hero Section */}
         <section className="hero-section">
           <div className="hero-pill">
@@ -64,7 +66,7 @@ function MainLayout() {
 
         {/* Comprehensive 38-Class Pathology Compendium */}
         <ClassSpectrumExplorer />
-      </main>
+      </main>}
 
       {/* Footer */}
       <footer className="footer glass-panel">
@@ -81,6 +83,7 @@ function MainLayout() {
       {/* Modals & Drawers */}
       <AuthModal />
       <HistoryDrawer />
+      <ProfileModal />
     </div>
   );
 }

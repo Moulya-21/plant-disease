@@ -44,22 +44,68 @@ export async function login(username, password) {
   return data;
 }
 
-export async function register(username, password) {
+export async function register(payload) {
+  const body = typeof payload === 'string'
+    ? { username: payload, password: arguments[1] }
+    : payload;
+
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail || 'Registration failed');
   }
+  if (data.token) {
+    setToken(data.token);
+    setUser(data.user);
+  }
   return data;
+}
+
+export async function getProfile() {
+  const token = getToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return await res.json();
 }
 
 export function logout() {
   setToken(null);
   setUser(null);
+}
+
+export async function deleteHistoryItem(recordId) {
+  const token = getToken();
+  if (!token) return;
+  const res = await fetch(`${API_BASE}/history/${recordId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.detail || 'Failed to delete record');
+  }
+  return await res.json();
+}
+
+export async function clearHistory() {
+  const token = getToken();
+  if (!token) return;
+  const res = await fetch(`${API_BASE}/history`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.detail || 'Failed to clear history');
+  }
+  return await res.json();
 }
 
 export async function checkHealth() {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, User, KeyRound, Sparkles, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { X, Lock, User, KeyRound, Sparkles, AlertCircle, Eye, EyeOff, Mail } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function AuthModal() {
@@ -7,7 +7,10 @@ export default function AuthModal() {
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +24,13 @@ export default function AuthModal() {
 
     try {
       if (isRegisterMode) {
-        await handleRegister(username, password);
+        await handleRegister({
+          full_name: fullName,
+          email,
+          username,
+          password,
+          confirm_password: confirmPassword,
+        });
       } else {
         await handleLogin(username, password);
       }
@@ -46,7 +55,7 @@ export default function AuthModal() {
         <div className="modal-header">
           <div className="modal-title-wrap">
             <KeyRound className="modal-icon" size={22} />
-            <h2>{isRegisterMode ? 'Register Agronomist' : 'Agronomist Access'}</h2>
+            <h2>{isRegisterMode ? 'Create your account' : 'Welcome back'}</h2>
           </div>
           <button
             className="modal-close-btn"
@@ -89,20 +98,48 @@ export default function AuthModal() {
         )}
 
         <form onSubmit={handleSubmit} className="auth-form">
+          {isRegisterMode && (
+            <>
+              <div className="form-group">
+                <label>Full name</label>
+                <div className="input-with-icon">
+                  <User size={16} className="input-icon" />
+                  <input type="text" className="input-field" placeholder="Your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Email address</label>
+                <div className="input-with-icon">
+                  <Mail size={16} className="input-icon" />
+                  <input type="email" className="input-field" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                </div>
+              </div>
+            </>
+          )}
           <div className="form-group">
-            <label>Agronomist Username</label>
+            <label>Email or username</label>
             <div className="input-with-icon">
               <User size={16} className="input-icon" />
               <input
                 type="text"
                 className="input-field"
-                placeholder="Enter username"
+                placeholder={isRegisterMode ? 'Choose a username' : 'Enter email or username'}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
           </div>
+
+          {isRegisterMode && (
+            <div className="form-group">
+              <label>Confirm password</label>
+              <div className="input-with-icon">
+                <Lock size={16} className="input-icon" />
+                <input type={showPassword ? 'text' : 'password'} className="input-field" placeholder="Repeat your password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label>Password</label>
@@ -131,8 +168,8 @@ export default function AuthModal() {
             {loading
               ? 'Authenticating Session...'
               : isRegisterMode
-              ? 'Create Profile & Sign In'
-              : 'Sign In to PlantGuard'}
+              ? 'Create account'
+              : 'Sign in to PlantGuard'}
           </button>
 
           {!isRegisterMode && (

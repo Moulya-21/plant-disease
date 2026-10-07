@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Flame, Sliders, Columns, Eye, Download, Info } from 'lucide-react';
 
-export default function GradCamViewer({ originalUrl, gradcamImage, className }) {
+export default function GradCamViewer({ originalUrl, heatmapImage, overlayImage, className }) {
   const [viewMode, setViewMode] = useState('slider'); // 'slider' | 'side-by-side' | 'heatmap'
   const [sliderPosition, setSliderPosition] = useState(50);
   const containerRef = useRef(null);
@@ -32,9 +32,9 @@ export default function GradCamViewer({ originalUrl, gradcamImage, className }) 
   };
 
   const downloadHeatmap = () => {
-    if (!gradcamImage) return;
+    if (!overlayImage) return;
     const link = document.createElement('a');
-    link.href = gradcamImage;
+    link.href = overlayImage;
     link.download = `gradcam_attribution_${Date.now()}.png`;
     link.click();
   };
@@ -109,7 +109,7 @@ export default function GradCamViewer({ originalUrl, gradcamImage, className }) 
         >
           {/* Heatmap Base */}
           <img
-            src={gradcamImage}
+            src={heatmapImage}
             alt="Grad-CAM Heatmap"
             className="slider-img slider-base-img"
             draggable={false}
@@ -159,7 +159,7 @@ export default function GradCamViewer({ originalUrl, gradcamImage, className }) 
               Grad-CAM Attention Map
             </span>
             <div className="side-img-box">
-              <img src={gradcamImage} alt="Heatmap" className="w-full h-full object-contain" />
+              <img src={heatmapImage} alt="Grad-CAM heatmap" className="w-full h-full object-contain" />
             </div>
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function GradCamViewer({ originalUrl, gradcamImage, className }) 
 
       {viewMode === 'heatmap' && (
         <div className="heatmap-solo-box">
-          <img src={gradcamImage} alt="Grad-CAM" className="max-h-[340px] w-auto mx-auto object-contain rounded-xl" />
+          <img src={overlayImage} alt="Grad-CAM overlay" className="max-h-[340px] w-auto mx-auto object-contain rounded-xl" />
         </div>
       )}
     </div>

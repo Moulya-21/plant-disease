@@ -22,6 +22,7 @@ export default function PredictionResult() {
   const {
     predictionResult,
     gradcamImage,
+    gradcamImages,
     previewUrl,
     isInferring,
     inferringType,
@@ -59,8 +60,8 @@ export default function PredictionResult() {
 
   const { prediction, top_predictions, all_predictions } = predictionResult;
   const confidencePercent = (prediction.confidence * 100).toFixed(1);
-  const isHealthy = prediction.class_name.toLowerCase().includes('healthy');
   const isLowConfidence = prediction.confidence < 0.6;
+  const isHealthy = !isLowConfidence && prediction.class_name.toLowerCase().includes('healthy');
   const advisory = getAdvisoryForClass(prediction.class_name);
 
   const filteredSpectrum = (all_predictions || []).filter((item) =>
@@ -92,7 +93,7 @@ export default function PredictionResult() {
             <div className="diagnosis-title-wrapper flex-1">
               <div className="diagnosis-tags">
                 <span className={`badge ${isHealthy ? 'badge-success' : 'badge-warning'}`}>
-                  {isHealthy ? 'Pristine Crop Health' : 'Pathology Detected'}
+                  {isLowConfidence ? 'Review required' : isHealthy ? 'Healthy leaf detected' : 'Possible pathology detected'}
                 </span>
                 <span className="badge badge-neutral">Inference Confidence: {confidencePercent}%</span>
                 {prediction.severity_percentage !== undefined && (
@@ -112,7 +113,7 @@ export default function PredictionResult() {
                   <span className="badge badge-neutral">Instant Cache ⚡</span>
                 )}
               </div>
-              <h2 className="primary-diagnosis-title">{prediction.class_name}</h2>
+              <h2 className="primary-diagnosis-title">{isLowConfidence ? 'Inconclusive analysis' : prediction.class_name}</h2>
             </div>
 
 
@@ -132,7 +133,7 @@ export default function PredictionResult() {
               <div>
                 <strong>Low Neural Certainty ({confidencePercent}%):</strong>
                 <span>
-                  {' '}Confidence is below optimal threshold (&lt;60%). Inspect background noise, ensure proper focus, or examine leaves under natural daylight.
+                  {' '}The model cannot reliably classify this image. Upload a clear, single leaf photographed against a simple background before acting on this result.
                 </span>
               </div>
             </div>
@@ -143,8 +144,9 @@ export default function PredictionResult() {
       {/* Grad-CAM Attribution Heatmap with Interactive Slider */}
       {gradcamImage && (
         <GradCamViewer
-          originalUrl={previewUrl}
-          gradcamImage={gradcamImage}
+          originalUrl={gradcamImages?.original || previewUrl}
+          heatmapImage={gradcamImages?.heatmap || gradcamImage}
+          overlayImage={gradcamImages?.overlay || gradcamImage}
           className={prediction.class_name}
         />
       )}

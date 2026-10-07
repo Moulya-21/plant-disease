@@ -38,7 +38,17 @@ class ModelService:
 
     @staticmethod
     def _format_class(name: str) -> str:
-        return name.replace("___", " - ").replace("_", " ")
+        return name.replace("___", " — ").replace("_", " ")
+
+    @staticmethod
+    def _apply_jet_colormap(gray_u8: np.ndarray) -> Image.Image:
+        """Pure-numpy jet colormap implementation (blue -> cyan -> yellow -> red)."""
+        v = gray_u8.astype(np.float32) / 255.0
+        r = np.clip(1.5 - np.abs(4.0 * v - 3.0), 0.0, 1.0)
+        g = np.clip(1.5 - np.abs(4.0 * v - 2.0), 0.0, 1.0)
+        b = np.clip(1.5 - np.abs(4.0 * v - 1.0), 0.0, 1.0)
+        rgb = np.stack([r, g, b], axis=-1)
+        return Image.fromarray((rgb * 255).astype(np.uint8))
 
     def _validate_foliage_quality(self, pil_image: Image.Image) -> dict[str, Any]:
         """Validates whether the image contains biological foliage characteristics."""
@@ -150,48 +160,60 @@ class ModelService:
         self._cache[cache_key] = (now, result)
         return result
 
-    def generate_gradcam(self, image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
-        """Generates convolutional Grad-CAM attention heatmap across any model backbone."""
+    def generate_gradcam(self, image_bytes: bytes) -> tuple[bytes, bytes, bytes, dict[str, Any]]:
+        """Generates convolutional Grad-CAM attention heatmap (Original, Standalone Heatmap, Blended Overlay)."""
         with Image.open(__import__("io").BytesIO(image_bytes)) as source:
             image = source.convert("RGB").resize((224, 224))
-            original = np.asarray(image, dtype=np.uint8)
 
         image_array = np.expand_dims(np.asarray(image, dtype=np.float32), axis=0)
 
         with tf.GradientTape() as tape:
             curr = tf.cast(image_array, tf.float32)
-            last_4d = None
+            last_conv = None
             for layer in self.model.layers:
                 if "input" in layer.name.lower():
                     continue
                 curr = layer(curr, training=False)
-                if len(curr.shape) == 4 and curr.shape[1] > 1 and curr.shape[2] > 1:
-                    last_4d = curr
-                    tape.watch(last_4d)
+                if layer.name == "conv2d_2" or (len(curr.shape) == 4 and curr.shape[1] > 1 and curr.shape[2] > 1):
+                    last_conv = curr
+                    tape.watch(last_conv)
             predictions = curr
             predicted_index = int(tf.argmax(predictions[0]))
             class_channel = predictions[:, predicted_index]
 
-        if last_4d is not None:
-            gradients = tape.gradient(class_channel, last_4d)
-            pooled_gradients = tf.reduce_mean(gradients, axis=(0, 1, 2))
-            heatmap = tf.squeeze(last_4d[0] @ pooled_gradients[..., tf.newaxis])
-            heatmap = tf.maximum(heatmap, 0)
-            max_value = tf.math.reduce_max(heatmap)
-            if max_value > 0:
-                heatmap = heatmap / max_value
-
-            heatmap_numpy = np.asarray(heatmap, dtype=np.float32)
-            heatmap_uint8 = np.clip((heatmap_numpy * 255).astype(np.uint8), 0, 255)
-            heatmap_image = Image.fromarray(heatmap_uint8, mode="L").resize(
-                (224, 224), Image.Resampling.BILINEAR
-            )
-            overlay = Image.blend(Image.fromarray(original), heatmap_image.convert("RGB"), 0.45)
+        if last_conv is not None:
+            gradients = tape.gradient(class_channel, last_conv)
+            if gradients is not None:
+                pooled_gradients = tf.reduce_mean(gradients, axis=(0, 1, 2))
+                cam = tf.squeeze(last_conv[0] @ pooled_gradients[..., tf.newaxis])
+                cam = tf.maximum(cam, 0)
+                max_value = tf.math.reduce_max(cam)
+                if max_value > 0:
+                    cam = cam / max_value
+                cam_numpy = np.asarray(cam, dtype=np.float32)
+            else:
+                feature_map = np.mean(last_conv[0].numpy(), axis=-1)
+                feature_map = np.maximum(feature_map, 0)
+                cam_numpy = feature_map / (np.max(feature_map) + 1e-8)
         else:
-            overlay = Image.fromarray(original)
+            cam_numpy = np.zeros((224, 224), dtype=np.float32)
+
+        heatmap_u8 = (np.clip(cam_numpy, 0.0, 1.0) * 255).astype(np.uint8)
+        heatmap_resized = Image.fromarray(heatmap_u8, mode="L").resize(
+            (224, 224), Image.Resampling.BILINEAR
+        )
+        heatmap_color = self._apply_jet_colormap(np.asarray(heatmap_resized, dtype=np.uint8))
+        overlay = Image.blend(image, heatmap_color, 0.45)
 
         from io import BytesIO
 
-        buffer = BytesIO()
-        overlay.save(buffer, format="PNG")
-        return buffer.getvalue(), self.predict(image_bytes)
+        orig_buf = BytesIO()
+        image.save(orig_buf, format="PNG")
+
+        heat_buf = BytesIO()
+        heatmap_color.save(heat_buf, format="PNG")
+
+        over_buf = BytesIO()
+        overlay.save(over_buf, format="PNG")
+
+        return orig_buf.getvalue(), heat_buf.getvalue(), over_buf.getvalue(), self.predict(image_bytes)

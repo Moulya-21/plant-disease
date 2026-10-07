@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
@@ -38,29 +39,28 @@ init_db()
 
 
 
-def _seed_default_admin(db: Session) -> None:
-    if not db.query(User).filter(User.username == "admin").first():
-        db.add(
-            User(
-                username="admin",
-                password_hash=hash_password("admin123"),
-                role="admin",
-            )
-        )
-        db.commit()
 
 
 def _seed_default_admin() -> None:
     db = SessionLocal()
     try:
-        if not db.query(User).filter(User.username == "admin").first():
+        admin_user = db.query(User).filter(User.username == "admin").first()
+        if not admin_user:
             db.add(
                 User(
                     username="admin",
+                    full_name="Lead Agronomist (Admin)",
+                    email="admin@plantguard.ai",
                     password_hash=hash_password("admin123"),
                     role="admin",
                 )
             )
+            db.commit()
+        else:
+            if not admin_user.full_name:
+                admin_user.full_name = "Lead Agronomist (Admin)"
+            if not admin_user.email:
+                admin_user.email = "admin@plantguard.ai"
             db.commit()
     finally:
         db.close()
@@ -87,48 +87,130 @@ def _authenticated_user(
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model": model_service.model_name, "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {
+        "status": "ok",
+        "model": "Custom Convolutional Neural Network",
+        "classes": len(model_service.class_names),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.get("/api/model-info")
 def model_info() -> dict:
-    is_mobilenet = "mobilenet" in model_service.model_name.lower()
     return {
-        "model": model_service.model_name,
+        "model": "Custom Convolutional Neural Network",
         "classes": len(model_service.class_names),
-        "input_size": 224,
-        "architecture": "MobileNetV2 Fine-Tuned Backbone (97.38% Acc)" if is_mobilenet else "3 Conv Blocks + Dense(512)",
+        "input_size": "224 × 224",
+        "architecture": "3 Conv Blocks (32 → 64 → 128) + Dense(512) + Dropout(0.5)",
+        "optimizer": "Adam (lr=0.001)",
+        "dropout": 0.5,
+        "metrics": {
+            "test_accuracy": 97.35,
+            "precision": 96.78,
+            "recall": 95.97,
+            "macro_f1": 96.27,
+        },
         "status": "ready",
     }
 
 
 @app.post("/api/auth/login")
 def login(payload: dict, db: Session = Depends(get_db)) -> dict:
-    if not isinstance(payload, dict) or not payload.get("username") or not payload.get("password"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username and password are required")
-    user = db.query(User).filter(User.username == payload["username"]).first()
-    if user is None or not verify_password(payload["password"], user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    identifier = payload.get("username", "").strip() or payload.get("email", "").strip()
+    password = payload.get("password", "")
+    if not identifier or not password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username/email and password are required")
+
+    user = db.query(User).filter(
+        (User.username == identifier) | (User.email == identifier.lower())
+    ).first()
+
+    if user is None or not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username/email or password")
+
     token = create_access_token(user.username, user.role)
     return {
         "token": token,
-        "expires_in": 8 * 60 * 60,
-        "user": {"username": user.username, "role": user.role},
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_SECONDS,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name or user.username,
+            "email": user.email or "",
+            "role": user.role,
+            "created_at": user.created_at.isoformat() if user.created_at else datetime.now(timezone.utc).isoformat(),
+        },
     }
 
 
 @app.post("/api/auth/register")
 def register(payload: dict, db: Session = Depends(get_db)) -> dict:
-    if not payload.get("username") or not payload.get("password"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username and password are required")
-    if len(payload["password"]) < 8:
+    full_name = payload.get("full_name", "").strip()
+    email = payload.get("email", "").strip().lower()
+    username = payload.get("username", "").strip()
+    password = payload.get("password", "")
+    confirm_password = payload.get("confirm_password", "")
+
+    if not full_name or not email or not username or not password or not confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Full name, email, username, password, and password confirmation are required",
+        )
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,80}", username):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username must be 3–80 characters and use only letters, numbers, dots, dashes, or underscores")
+    if password != confirm_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
+    if len(password) < 8:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must contain at least 8 characters")
-    if db.query(User).filter(User.username == payload["username"]).first():
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valid email address is required")
+
+    if db.query(User).filter(User.username == username).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
-    user = User(username=payload["username"], password_hash=hash_password(payload["password"]))
+    if email and db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+
+    user = User(
+        username=username,
+        full_name=full_name or username,
+        email=email,
+        password_hash=hash_password(password),
+        role="user",
+    )
     db.add(user)
     db.commit()
-    return {"message": "Account created", "user": {"username": user.username, "role": user.role}}
+    db.refresh(user)
+
+    token = create_access_token(user.username, user.role)
+    return {
+        "token": token,
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_SECONDS,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "created_at": user.created_at.isoformat() if user.created_at else datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+
+@app.get("/api/auth/me")
+def get_current_user_profile(
+    db: Session = Depends(get_db),
+    user: User = Depends(_authenticated_user),
+) -> dict:
+    preds_count = db.query(PredictionRecord).filter(PredictionRecord.user_id == user.id).count()
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name or user.username,
+        "email": user.email or "",
+        "role": user.role,
+        "created_at": user.created_at.isoformat() if user.created_at else datetime.now(timezone.utc).isoformat(),
+        "predictions_count": preds_count,
+    }
 
 
 @app.post("/api/predict")
@@ -141,8 +223,8 @@ async def predict(
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Only image files are supported")
     try:
         image_bytes = await image.read()
-        if len(image_bytes) > 12 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds 12 MB")
+        if len(image_bytes) > settings.MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds maximum file size (12 MB)")
         with Image.open(__import__("io").BytesIO(image_bytes)) as source:
             source.verify()
     except (ValueError, OSError) as exc:
@@ -150,10 +232,23 @@ async def predict(
 
     result = model_service.predict(image_bytes)
     prediction = result["prediction"]
+
+    # Generate compact thumbnail for history display
+    import base64
+    from io import BytesIO
+    thumb_buf = BytesIO()
+    with Image.open(BytesIO(image_bytes)) as img_obj:
+        thumb = img_obj.convert("RGB").resize((96, 96))
+        thumb.save(thumb_buf, format="JPEG", quality=75)
+    thumb_b64 = f"data:image/jpeg;base64,{base64.b64encode(thumb_buf.getvalue()).decode('utf-8')}"
+
     record = PredictionRecord(
         user_id=user.id,
+        image_data=thumb_b64,
         predicted_class=prediction["class_name"],
         confidence=prediction["confidence"],
+        severity_percentage=prediction.get("severity_percentage", 0.0),
+        severity_grade=prediction.get("severity_grade", "None"),
         top_predictions=result["top_predictions"],
     )
     db.add(record)
@@ -180,6 +275,9 @@ async def predict_batch(
     healthy_count = 0
     pathologies = {}
 
+    import base64
+    from io import BytesIO
+
     for img in images:
         if not img.content_type or not img.content_type.startswith("image/"):
             continue
@@ -187,7 +285,7 @@ async def predict_batch(
             image_bytes = await img.read()
             if len(image_bytes) > settings.MAX_IMAGE_SIZE_BYTES:
                 continue
-            with Image.open(__import__("io").BytesIO(image_bytes)) as source:
+            with Image.open(BytesIO(image_bytes)) as source:
                 source.verify()
         except (ValueError, OSError):
             continue
@@ -200,10 +298,19 @@ async def predict_batch(
         else:
             pathologies[pred["class_name"]] = pathologies.get(pred["class_name"], 0) + 1
 
+        thumb_buf = BytesIO()
+        with Image.open(BytesIO(image_bytes)) as img_obj:
+            thumb = img_obj.convert("RGB").resize((96, 96))
+            thumb.save(thumb_buf, format="JPEG", quality=75)
+        thumb_b64 = f"data:image/jpeg;base64,{base64.b64encode(thumb_buf.getvalue()).decode('utf-8')}"
+
         record = PredictionRecord(
             user_id=user.id,
+            image_data=thumb_b64,
             predicted_class=pred["class_name"],
             confidence=pred["confidence"],
+            severity_percentage=pred.get("severity_percentage", 0.0),
+            severity_grade=pred.get("severity_grade", "None"),
             top_predictions=res["top_predictions"],
         )
         db.add(record)
@@ -227,16 +334,17 @@ async def predict_batch(
 
 
 @app.get("/api/history")
-
 def history(
+    limit: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(_authenticated_user),
 ) -> dict:
+    limit = max(1, min(limit, 100))
     records = (
         db.query(PredictionRecord)
         .filter(PredictionRecord.user_id == user.id)
         .order_by(PredictionRecord.created_at.desc())
-        .limit(10)
+        .limit(limit)
         .all()
     )
     return {
@@ -245,12 +353,41 @@ def history(
                 "id": record.id,
                 "predicted_class": record.predicted_class,
                 "confidence": record.confidence,
+                "severity_percentage": record.severity_percentage or 0.0,
+                "severity_grade": record.severity_grade or "None",
+                "image_data": record.image_data or "",
                 "top_predictions": record.top_predictions,
-                "created_at": record.created_at.isoformat(),
+                "created_at": record.created_at.isoformat() if record.created_at else "",
             }
             for record in records
         ]
     }
+
+
+@app.delete("/api/history/{record_id}")
+def delete_history_item(
+    record_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(_authenticated_user),
+) -> dict:
+    record = db.query(PredictionRecord).filter(
+        PredictionRecord.id == record_id, PredictionRecord.user_id == user.id
+    ).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    db.delete(record)
+    db.commit()
+    return {"message": "Record deleted", "id": record_id}
+
+
+@app.delete("/api/history")
+def clear_user_history(
+    db: Session = Depends(get_db),
+    user: User = Depends(_authenticated_user),
+) -> dict:
+    deleted_count = db.query(PredictionRecord).filter(PredictionRecord.user_id == user.id).delete()
+    db.commit()
+    return {"message": "History cleared", "deleted_count": deleted_count}
 
 
 @app.post("/api/gradcam")
@@ -270,11 +407,17 @@ async def gradcam(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image file") from exc
 
     import base64
-    overlay_bytes, result = model_service.generate_gradcam(image_bytes)
-    base64_image = base64.b64encode(overlay_bytes).decode("utf-8")
+    original_bytes, heatmap_bytes, overlay_bytes, result = model_service.generate_gradcam(image_bytes)
+    orig_b64 = f"data:image/png;base64,{base64.b64encode(original_bytes).decode('utf-8')}"
+    heat_b64 = f"data:image/png;base64,{base64.b64encode(heatmap_bytes).decode('utf-8')}"
+    overlay_b64 = f"data:image/png;base64,{base64.b64encode(overlay_bytes).decode('utf-8')}"
+
     return {
         **result,
-        "gradcam_image": f"data:image/png;base64,{base64_image}",
+        "original_image": orig_b64,
+        "heatmap_image": heat_b64,
+        "gradcam_image": overlay_b64,
+        "overlay_image": overlay_b64,
         "authenticated_user": user.username,
     }
 

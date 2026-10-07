@@ -20,7 +20,7 @@ export default function HistoryDrawer() {
     historyLoading,
     bookmarkedIds,
     toggleBookmark,
-    optimisticDeleteRecord,
+    deleteRecord,
   } = useApp();
 
   const [query, setQuery] = useState('');
@@ -147,8 +147,8 @@ export default function HistoryDrawer() {
                         </button>
                         <button
                           className="history-action-btn delete-btn"
-                          onClick={() => optimisticDeleteRecord(rec.id)}
-                          title="Delete record (optimistic with undo)"
+                          onClick={() => deleteRecord(rec.id)}
+                          title="Delete record"
                         >
                           <Trash2 size={14} />
                         </button>

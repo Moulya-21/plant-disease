@@ -245,20 +245,12 @@ export default function ImageUploader() {
         </div>
       )}
 
-      {/* Benchmark Specimen Chips */}
+      {/* Verified sample: the remaining analysis must come from real user images. */}
       <div className="sample-test-bar">
         <span className="sample-label">
-          <Sparkles size={14} /> Instant Benchmark Calibration:
+          <Sparkles size={14} /> Verified model sample:
         </span>
         <div className="sample-buttons">
-          <button
-            type="button"
-            className="sample-btn"
-            onClick={() => loadBenchmarkSpecimen('tomato_blight')}
-            disabled={isInferring}
-          >
-            🍅 Tomato Blight
-          </button>
           <button
             type="button"
             className="sample-btn"
@@ -266,14 +258,6 @@ export default function ImageUploader() {
             disabled={isInferring}
           >
             🌽 Corn Common Rust
-          </button>
-          <button
-            type="button"
-            className="sample-btn"
-            onClick={() => loadBenchmarkSpecimen('healthy_leaf')}
-            disabled={isInferring}
-          >
-            🌿 Pristine Foliage
           </button>
         </div>
       </div>
@@ -306,4 +290,3 @@ export default function ImageUploader() {
     </div>
   );
 }
-

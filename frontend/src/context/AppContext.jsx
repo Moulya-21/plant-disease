@@ -12,6 +12,7 @@ import {
   predictDisease,
   generateGradcam,
   fetchHistory,
+  deleteHistoryItem,
 } from '../api';
 
 const AppContext = createContext(null);
@@ -34,6 +35,7 @@ export function AppProvider({ children }) {
   // 2. Authentication State
   const [user, setUserState] = useState(() => getUser());
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogin = useCallback(async (username, password) => {
     const data = await login(username, password);
@@ -42,12 +44,11 @@ export function AppProvider({ children }) {
     return data;
   }, []);
 
-  const handleRegister = useCallback(async (username, password) => {
-    const data = await register(username, password);
-    const loginData = await login(username, password);
-    setUserState(loginData.user);
-    showToast('success', 'Account Activated', `Agronomist profile created for ${username}.`);
-    return loginData;
+  const handleRegister = useCallback(async (payload) => {
+    const data = await register(payload);
+    setUserState(data.user);
+    showToast('success', 'Account created', `Welcome to PlantGuard AI, ${data.user.full_name}.`);
+    return data;
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -96,6 +97,7 @@ export function AppProvider({ children }) {
   const [inferringType, setInferringType] = useState(null); // 'predict' | 'gradcam'
   const [predictionResult, setPredictionResult] = useState(null);
   const [gradcamImage, setGradcamImage] = useState(null);
+  const [gradcamImages, setGradcamImages] = useState(null);
 
   const selectSpecimen = useCallback((file) => {
     if (!file) {
@@ -116,6 +118,7 @@ export function AppProvider({ children }) {
     setPreviewUrl(null);
     setPredictionResult(null);
     setGradcamImage(null);
+    setGradcamImages(null);
   }, [previewUrl]);
 
   // 5. Audit History & Optimistic Updates
@@ -164,18 +167,17 @@ export function AppProvider({ children }) {
   }, []);
 
   // Optimistic Record Deletion with Rollback capability
-  const optimisticDeleteRecord = useCallback(
-    (recordId) => {
+  const deleteRecord = useCallback(
+    async (recordId) => {
       const previousRecords = [...historyRecords];
-      // Instantly update UI optimistically
       setHistoryRecords((prev) => prev.filter((r) => r.id !== recordId));
-      showToast('info', 'Record Removed', 'Diagnosis removed from active session.', {
-        label: 'Undo',
-        onClick: () => {
-          setHistoryRecords(previousRecords);
-          showToast('success', 'Restored', 'Record restored.');
-        },
-      });
+      try {
+        await deleteHistoryItem(recordId);
+        showToast('success', 'Record deleted', 'The saved analysis was removed from your history.');
+      } catch (error) {
+        setHistoryRecords(previousRecords);
+        showToast('error', 'Could not delete record', error.message || 'Please try again.');
+      }
     },
     [historyRecords]
   );
@@ -194,6 +196,7 @@ export function AppProvider({ children }) {
       setIsInferring(true);
       setInferringType('predict');
       setGradcamImage(null);
+      setGradcamImages(null);
 
       try {
         const result = await predictDisease(targetFile);
@@ -230,6 +233,11 @@ export function AppProvider({ children }) {
       try {
         const result = await generateGradcam(targetFile);
         setGradcamImage(result.gradcam_image);
+        setGradcamImages({
+          original: result.original_image,
+          heatmap: result.heatmap_image,
+          overlay: result.overlay_image || result.gradcam_image,
+        });
         setPredictionResult(result);
         showToast('success', 'Grad-CAM Ready', 'Neural activation heatmap generated.');
       } catch (err) {
@@ -273,6 +281,8 @@ export function AppProvider({ children }) {
     user,
     authModalOpen,
     setAuthModalOpen,
+    profileOpen,
+    setProfileOpen,
     handleLogin,
     handleRegister,
     handleLogout,
@@ -288,6 +298,7 @@ export function AppProvider({ children }) {
     inferringType,
     predictionResult,
     gradcamImage,
+    gradcamImages,
     runPrediction,
     runGradCam,
     // History & Optimistic Actions
@@ -298,7 +309,7 @@ export function AppProvider({ children }) {
     loadHistory,
     bookmarkedIds,
     toggleBookmark,
-    optimisticDeleteRecord,
+    deleteRecord,
     // Toasts
     toasts,
     removeToast,
