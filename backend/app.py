@@ -1,26 +1,32 @@
+import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from sqlalchemy.orm import Session
 
+from backend.config import settings
 from backend.database import SessionLocal, get_db, init_db
 from backend.models import PredictionRecord, User
 from backend.model_service import ModelService
 from backend.security import create_access_token, decode_access_token, hash_password, verify_password
 
+logger = logging.getLogger("plantguard")
+
 app = FastAPI(
     title="Plant Disease Detection API",
     version="1.0.0",
-    description="Secure full-stack plant disease classification service.",
+    description="Enterprise-grade agronomic plant pathology classification service.",
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(","),
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,6 +35,7 @@ app.add_middleware(
 security = HTTPBearer(auto_error=False)
 model_service = ModelService()
 init_db()
+
 
 
 def _seed_default_admin(db: Session) -> None:
@@ -192,8 +199,8 @@ async def gradcam(
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Only image files are supported")
     try:
         image_bytes = await image.read()
-        if len(image_bytes) > 12 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds 12 MB")
+        if len(image_bytes) > settings.MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds maximum file size")
         with Image.open(__import__("io").BytesIO(image_bytes)) as source:
             source.verify()
     except (ValueError, OSError) as exc:
@@ -209,11 +216,8 @@ async def gradcam(
     }
 
 
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+if settings.FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(settings.FRONTEND_DIST), html=True), name="frontend")
 
-FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
-if FRONTEND_DIST.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
 
 

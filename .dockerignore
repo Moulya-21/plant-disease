@@ -1,0 +1,33 @@
+# Git & VCS
+.git/
+.gitignore
+.gitattributes
+
+# Virtual Environment & Python cache
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node & Frontend dependencies
+frontend/node_modules/
+frontend/.oxlintrc.json
+
+# Local runtime data & caches
+data/
+*.db
+.pytest_cache/
+.coverage
+htmlcov/
+.loop-state.json
+
+# Dataset (Mount externally if retraining)
+dataset/
+PlantVillage/
+*.zip
+
+# Operating System files
+.DS_Store
+Thumbs.db

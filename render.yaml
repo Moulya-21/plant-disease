@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: plantguard-ai
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_SECONDS
+        value: 28800
+      - key: MODEL_FILE
+        value: custom_cnn_best.keras

@@ -7,9 +7,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-MODEL_PATH = BASE_DIR / "model" / "custom_cnn_best.keras"
-CLASS_NAMES_PATH = BASE_DIR / "model" / "class_names.json"
+from backend.config import settings
 
 
 class ModelService:
@@ -21,13 +19,14 @@ class ModelService:
             raise RuntimeError(f"Expected 38 classes, found {len(self.class_names)}")
 
     def _load_model(self):
-        if not MODEL_PATH.exists():
-            raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
+        if not settings.MODEL_PATH.exists():
+            raise FileNotFoundError(f"Model not found: {settings.MODEL_PATH}")
+        return tf.keras.models.load_model(settings.MODEL_PATH, compile=False)
 
     def _load_class_names(self) -> list[str]:
-        with CLASS_NAMES_PATH.open("r", encoding="utf-8") as file:
+        with settings.CLASS_NAMES_PATH.open("r", encoding="utf-8") as file:
             return json.load(file)
+
 
     @staticmethod
     def _format_class(name: str) -> str:

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  plantguard-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plantguard_production_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - JWT_SECRET=production-secret-change-in-env-file-or-vault
+      - ACCESS_TOKEN_EXPIRE_SECONDS=28800
+      - DATABASE_URL=sqlite:///data/plant_disease.db
+      - CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+      - MODEL_FILE=custom_cnn_best.keras
+    volumes:
+      - plantguard_data:/app/data
+      - ./model:/app/model:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  plantguard_data:
+    driver: local
