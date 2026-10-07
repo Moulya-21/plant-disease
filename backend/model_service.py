@@ -19,7 +19,7 @@ class ModelService:
     def __init__(self) -> None:
         self.model = self._load_model()
         self.class_names = self._load_class_names()
-        self.last_conv_layer = "conv2d_2"
+        self.model_name = settings.MODEL_PATH.stem
         self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._cache_ttl = 3600  # 1 hour cache TTL
 
@@ -141,7 +141,7 @@ class ModelService:
             "all_predictions": all_predictions,
             "quality_metrics": quality_metrics,
             "tta_enabled": use_tta,
-            "model": "custom_cnn_best",
+            "model": self.model_name,
             "input_size": 224,
             "cached": False,
         }
@@ -151,50 +151,45 @@ class ModelService:
         return result
 
     def generate_gradcam(self, image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
-        """Generates convolutional Grad-CAM attention heatmap."""
+        """Generates convolutional Grad-CAM attention heatmap across any model backbone."""
         with Image.open(__import__("io").BytesIO(image_bytes)) as source:
             image = source.convert("RGB").resize((224, 224))
             original = np.asarray(image, dtype=np.uint8)
 
         image_array = np.expand_dims(np.asarray(image, dtype=np.float32), axis=0)
-        conv_layers = []
-        classifier_layers = []
-        found_conv = False
-        for layer in self.model.layers:
-            if not found_conv:
-                conv_layers.append(layer)
-                if layer.name == self.last_conv_layer:
-                    found_conv = True
-            else:
-                classifier_layers.append(layer)
 
         with tf.GradientTape() as tape:
-            x = tf.cast(image_array, tf.float32)
-            for layer in conv_layers:
-                x = layer(x, training=False)
-            conv_output = x
-            tape.watch(conv_output)
-            y = conv_output
-            for layer in classifier_layers:
-                y = layer(y, training=False)
-            predictions = y
+            curr = tf.cast(image_array, tf.float32)
+            last_4d = None
+            for layer in self.model.layers:
+                if "input" in layer.name.lower():
+                    continue
+                curr = layer(curr, training=False)
+                if len(curr.shape) == 4 and curr.shape[1] > 1 and curr.shape[2] > 1:
+                    last_4d = curr
+                    tape.watch(last_4d)
+            predictions = curr
             predicted_index = int(tf.argmax(predictions[0]))
             class_channel = predictions[:, predicted_index]
 
-        gradients = tape.gradient(class_channel, conv_output)
-        pooled_gradients = tf.reduce_mean(gradients, axis=(0, 1, 2))
-        heatmap = tf.squeeze(conv_output[0] @ pooled_gradients[..., tf.newaxis])
-        heatmap = tf.maximum(heatmap, 0)
-        max_value = tf.math.reduce_max(heatmap)
-        if max_value > 0:
-            heatmap = heatmap / max_value
+        if last_4d is not None:
+            gradients = tape.gradient(class_channel, last_4d)
+            pooled_gradients = tf.reduce_mean(gradients, axis=(0, 1, 2))
+            heatmap = tf.squeeze(last_4d[0] @ pooled_gradients[..., tf.newaxis])
+            heatmap = tf.maximum(heatmap, 0)
+            max_value = tf.math.reduce_max(heatmap)
+            if max_value > 0:
+                heatmap = heatmap / max_value
 
-        heatmap_numpy = np.asarray(heatmap, dtype=np.float32)
-        heatmap_uint8 = np.clip((heatmap_numpy * 255).astype(np.uint8), 0, 255)
-        heatmap_image = Image.fromarray(heatmap_uint8, mode="L").resize(
-            (224, 224), Image.Resampling.BILINEAR
-        )
-        overlay = Image.blend(Image.fromarray(original), heatmap_image.convert("RGB"), 0.45)
+            heatmap_numpy = np.asarray(heatmap, dtype=np.float32)
+            heatmap_uint8 = np.clip((heatmap_numpy * 255).astype(np.uint8), 0, 255)
+            heatmap_image = Image.fromarray(heatmap_uint8, mode="L").resize(
+                (224, 224), Image.Resampling.BILINEAR
+            )
+            overlay = Image.blend(Image.fromarray(original), heatmap_image.convert("RGB"), 0.45)
+        else:
+            overlay = Image.fromarray(original)
+
         from io import BytesIO
 
         buffer = BytesIO()

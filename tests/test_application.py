@@ -12,7 +12,7 @@ def test_health_endpoint_is_public():
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["model"] == "custom_cnn_best"
+    assert payload["model"] in ["mobilenetv2_finetuned_best", "custom_cnn_best"]
 
 
 def test_protected_prediction_endpoint_rejects_unauthenticated_requests():

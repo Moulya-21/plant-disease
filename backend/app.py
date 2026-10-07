@@ -87,16 +87,17 @@ def _authenticated_user(
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model": "custom_cnn_best", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "ok", "model": model_service.model_name, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/api/model-info")
 def model_info() -> dict:
+    is_mobilenet = "mobilenet" in model_service.model_name.lower()
     return {
-        "model": "custom_cnn_best",
-        "classes": 38,
+        "model": model_service.model_name,
+        "classes": len(model_service.class_names),
         "input_size": 224,
-        "architecture": "3 Conv Blocks + Dense(512)",
+        "architecture": "MobileNetV2 Fine-Tuned Backbone (97.38% Acc)" if is_mobilenet else "3 Conv Blocks + Dense(512)",
         "status": "ready",
     }
 

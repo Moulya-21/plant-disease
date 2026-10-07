@@ -34,7 +34,12 @@ class Settings:
     ]
 
     # Model & Inference
-    MODEL_PATH: Path = MODEL_DIR / os.getenv("MODEL_FILE", "custom_cnn_best.keras")
+    DEFAULT_MODEL_FILE: str = (
+        "mobilenetv2_finetuned_best.keras"
+        if (MODEL_DIR / "mobilenetv2_finetuned_best.keras").exists()
+        else "custom_cnn_best.keras"
+    )
+    MODEL_PATH: Path = MODEL_DIR / os.getenv("MODEL_FILE", DEFAULT_MODEL_FILE)
     CLASS_NAMES_PATH: Path = MODEL_DIR / "class_names.json"
     MAX_IMAGE_SIZE_BYTES: int = int(os.getenv("MAX_IMAGE_SIZE_BYTES", str(12 * 1024 * 1024)))  # 12 MB
 

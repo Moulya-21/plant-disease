@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import CameraCapture from './CameraCapture';
+import { SAMPLE_SPECIMENS, dataURLtoFile } from '../sampleSpecimens';
 
 
 export default function ImageUploader() {
@@ -127,6 +128,20 @@ export default function ImageUploader() {
     }, 'image/png');
   };
 
+  const loadBenchmarkSpecimen = (type) => {
+    try {
+      const dataUrl = SAMPLE_SPECIMENS[type];
+      if (dataUrl) {
+        const file = dataURLtoFile(dataUrl, `${type}_specimen.jpg`);
+        handleFile(file);
+        return;
+      }
+    } catch (err) {
+      console.warn('Fallback to synthetic specimen:', err);
+    }
+    generateSyntheticSpecimen(type);
+  };
+
   return (
     <div className="uploader-card glass-panel">
       <div className="uploader-header">
@@ -239,7 +254,7 @@ export default function ImageUploader() {
           <button
             type="button"
             className="sample-btn"
-            onClick={() => generateSyntheticSpecimen('tomato_blight')}
+            onClick={() => loadBenchmarkSpecimen('tomato_blight')}
             disabled={isInferring}
           >
             🍅 Tomato Blight
@@ -247,7 +262,7 @@ export default function ImageUploader() {
           <button
             type="button"
             className="sample-btn"
-            onClick={() => generateSyntheticSpecimen('corn_rust')}
+            onClick={() => loadBenchmarkSpecimen('corn_rust')}
             disabled={isInferring}
           >
             🌽 Corn Common Rust
@@ -255,7 +270,7 @@ export default function ImageUploader() {
           <button
             type="button"
             className="sample-btn"
-            onClick={() => generateSyntheticSpecimen('healthy')}
+            onClick={() => loadBenchmarkSpecimen('healthy_leaf')}
             disabled={isInferring}
           >
             🌿 Pristine Foliage
