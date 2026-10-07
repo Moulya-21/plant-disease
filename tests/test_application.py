@@ -85,3 +85,35 @@ def test_root_serves_spa_frontend():
     assert '<div id="root">' in response.text
 
 
+def test_batch_prediction_endpoint():
+    # Create two synthetic specimen images
+    img1 = Image.new("RGB", (224, 224), color=(60, 150, 70))
+    buf1 = BytesIO()
+    img1.save(buf1, format="PNG")
+
+    img2 = Image.new("RGB", (224, 224), color=(120, 100, 50))
+    buf2 = BytesIO()
+    img2.save(buf2, format="PNG")
+
+    login_response = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admin123"},
+    )
+    token = login_response.json()["token"]
+
+    response = client.post(
+        "/api/predict/batch",
+        files=[
+            ("images", ("leaf1.png", buf1.getvalue(), "image/png")),
+            ("images", ("leaf2.png", buf2.getvalue(), "image/png")),
+        ],
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_specimens"] == 2
+    assert "crop_vigor_percentage" in payload
+    assert len(payload["results"]) == 2
+
+
+

@@ -9,8 +9,11 @@ import {
   CheckCircle2,
   FileCheck,
   Crop,
+  Camera,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import CameraCapture from './CameraCapture';
+
 
 export default function ImageUploader() {
   const {
@@ -25,8 +28,10 @@ export default function ImageUploader() {
   } = useApp();
 
   const [isDragging, setIsDragging] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [imageMeta, setImageMeta] = useState(null);
   const fileInputRef = useRef(null);
+
 
   useEffect(() => {
     if (!previewUrl) {
@@ -158,10 +163,31 @@ export default function ImageUploader() {
           </div>
           <h3 className="dropzone-title">Drag & drop leaf specimen or browse</h3>
           <p className="dropzone-subtitle">Accepts JPG, PNG, WEBP (Max 12 MB • 224×224 normalized)</p>
-          <button type="button" className="btn btn-secondary browse-btn">
-            Choose Specimen File
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            <button
+              type="button"
+              className="btn btn-secondary browse-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+            >
+              Choose Specimen File
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary browse-btn flex items-center gap-1.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCameraOpen(true);
+              }}
+            >
+              <Camera size={15} />
+              <span>Open Field Camera</span>
+            </button>
+          </div>
         </div>
+
       ) : (
         <div className="preview-container animate-fade-in">
           <div className="preview-image-wrapper">
@@ -257,6 +283,12 @@ export default function ImageUploader() {
           <span>{isInferring && inferringType === 'gradcam' ? 'Calculating Heatmap...' : 'Explainable Grad-CAM'}</span>
         </button>
       </div>
+
+      <CameraCapture
+        isOpen={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+      />
     </div>
   );
 }
+

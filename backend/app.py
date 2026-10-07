@@ -164,7 +164,69 @@ async def predict(
     }
 
 
+@app.post("/api/predict/batch")
+async def predict_batch(
+    images: list[UploadFile],
+    db: Session = Depends(get_db),
+    user: User = Depends(_authenticated_user),
+) -> dict:
+    if not images or len(images) == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one image is required")
+    if len(images) > 10:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batch limit is 10 images per request")
+
+    batch_results = []
+    healthy_count = 0
+    pathologies = {}
+
+    for img in images:
+        if not img.content_type or not img.content_type.startswith("image/"):
+            continue
+        try:
+            image_bytes = await img.read()
+            if len(image_bytes) > settings.MAX_IMAGE_SIZE_BYTES:
+                continue
+            with Image.open(__import__("io").BytesIO(image_bytes)) as source:
+                source.verify()
+        except (ValueError, OSError):
+            continue
+
+        res = model_service.predict(image_bytes)
+        pred = res["prediction"]
+        is_healthy = "healthy" in pred["class_name"].lower()
+        if is_healthy:
+            healthy_count += 1
+        else:
+            pathologies[pred["class_name"]] = pathologies.get(pred["class_name"], 0) + 1
+
+        record = PredictionRecord(
+            user_id=user.id,
+            predicted_class=pred["class_name"],
+            confidence=pred["confidence"],
+            top_predictions=res["top_predictions"],
+        )
+        db.add(record)
+        batch_results.append({
+            "filename": img.filename,
+            **res,
+        })
+
+    db.commit()
+    total_processed = len(batch_results)
+    vigor_pct = round((healthy_count / total_processed * 100), 1) if total_processed > 0 else 0.0
+
+    return {
+        "total_specimens": total_processed,
+        "healthy_count": healthy_count,
+        "infected_count": total_processed - healthy_count,
+        "crop_vigor_percentage": vigor_pct,
+        "primary_pathologies": pathologies,
+        "results": batch_results,
+    }
+
+
 @app.get("/api/history")
+
 def history(
     db: Session = Depends(get_db),
     user: User = Depends(_authenticated_user),
