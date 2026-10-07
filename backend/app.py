@@ -181,3 +181,39 @@ def history(
             for record in records
         ]
     }
+
+
+@app.post("/api/gradcam")
+async def gradcam(
+    image: UploadFile,
+    user: User = Depends(_authenticated_user),
+) -> dict:
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Only image files are supported")
+    try:
+        image_bytes = await image.read()
+        if len(image_bytes) > 12 * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds 12 MB")
+        with Image.open(__import__("io").BytesIO(image_bytes)) as source:
+            source.verify()
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image file") from exc
+
+    import base64
+    overlay_bytes, result = model_service.generate_gradcam(image_bytes)
+    base64_image = base64.b64encode(overlay_bytes).decode("utf-8")
+    return {
+        **result,
+        "gradcam_image": f"data:image/png;base64,{base64_image}",
+        "authenticated_user": user.username,
+    }
+
+
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+
+

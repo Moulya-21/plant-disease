@@ -29,3 +29,11 @@ archive.zip
 
 # Sample images
 tomato image.jpeg
+
+# Frontend dependencies
+frontend/node_modules/
+frontend/dist/
+
+# SQLite runtime databases
+*.db
+data/

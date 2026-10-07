@@ -54,3 +54,34 @@ def test_prediction_accepts_valid_image_and_returns_38_classes():
     assert len(payload["all_predictions"]) == 38
     assert payload["prediction"]["confidence"] >= 0
     assert payload["prediction"]["confidence"] <= 1
+
+
+def test_gradcam_endpoint_returns_base64_heatmap():
+    image = Image.new("RGB", (224, 224), color=(80, 160, 90))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    login_response = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admin123"},
+    )
+    token = login_response.json()["token"]
+    response = client.post(
+        "/api/gradcam",
+        files={"image": ("leaf.png", buffer.getvalue(), "image/png")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["gradcam_image"].startswith("data:image/png;base64,")
+    assert "prediction" in payload
+
+
+def test_root_serves_spa_frontend():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "PlantGuard" in response.text
+    assert '<div id="root">' in response.text
+
+
